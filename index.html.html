@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Engelden Kaçış Oyunu</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            color: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            touch-action: none;
+            position: relative;
+        }
+        #background-video {
+            position: fixed;
+            right: 0;
+            bottom: 0;
+            min-width: 100%;
+            min-height: 100%;
+            width: auto;
+            height: auto;
+            z-index: -1;
+            background-size: cover;
+            filter: brightness(50%); /* Oyunun görünürlüğünü artırmak için parlaklığı düşür */
+        }
+        #gameCanvas {
+            background-color: transparent; 
+            border: 2px solid #fff;
+            border-radius: 1rem;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+            touch-action: none;
+            width: 95vw;
+            max-width: 400px;
+            aspect-ratio: 9 / 16;
+        }
+        .ui-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 10;
+        }
+        .ui-button {
+            padding: 0.75rem 1.5rem;
+            border-radius: 9999px;
+            background-color: #fff;
+            color: #121212;
+            font-weight: bold;
+            font-size: 1.25rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+            border: none;
+            outline: none;
+        }
+        .ui-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .ui-button:active {
+            transform: translateY(0);
+            box-shadow: 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+        }
+        .game-over-text {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #ff4500;
+            margin-bottom: 1rem;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        .score-display {
+            position: absolute;
+            top: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 2rem;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            z-index: 10;
+        }
+        .message-box {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #fff;
+            color: #121212;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            z-index: 100;
+            animation: fadeIn 0.3s ease-out;
+            display: none;
+            flex-direction: column;
+            gap: 1rem;
+            max-width: 80%;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translate(-50%, -60%); }
+            to { opacity: 1; transform: translate(-50%, -50%); }
+        }
+        .message-box-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        .message-box-body {
+            font-size: 1rem;
+            line-height: 1.5;
+        }
+        .game-message {
+            position: absolute;
+            top: 6rem;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: #fca5a5;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
+            text-align: center;
+            width: 80%;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <!-- -------------------------------------------------------------------------------------------------- -->
+    <!-- ARKA PLAN VİDEOSU -->
+    <!-- Kendi video dosyanızın yolunu (MP4, WEBM vb.) "src" kısmına ekleyin. -->
+    <video autoplay muted loop id="background-video">
+      <source src="arka-plan.mp4" type="video/mp4">
+      Tarayıcınız video etiketini desteklemiyor.
+    </video>
+    <!-- -------------------------------------------------------------------------------------------------- -->
+
+    <div class="message-box" id="message-box">
+        <h2 class="message-box-title">Oyun Bitti!</h2>
+        <p class="message-box-body">Puanınız: <span id="final-score">0</span></p>
+        <button onclick="hideMessageBox(); resetGame();" class="ui-button mt-4">Tekrar Oyna</button>
+    </div>
+
+    <h1 class="text-3xl font-bold mb-4">Engelden Kaçış</h1>
+    
+    <div class="relative flex-grow flex items-center justify-center w-full max-w-sm mx-auto">
+        <canvas id="gameCanvas" class="shadow-lg"></canvas>
+        <div id="start-screen" class="ui-container">
+            <h2 class="text-xl font-bold mb-4 text-white">Kocanın midesine girmek ister misin?</h2>
+            <button id="startButton" class="ui-button">Oyuna Başla</button>
+        </div>
+        <div id="game-over-screen" class="ui-container hidden">
+            <h2 class="game-over-text">OYUN BİTTİ</h2>
+            <button id="restartButton" class="ui-button">Tekrar Oyna</button>
+        </div>
+        <div id="score-display" class="score-display hidden">
+            Puan: <span id="current-score">0</span>
+        </div>
+        <div id="game-message" class="game-message hidden"></div>
+    </div>
+    
+    <script>
+        // Canvas ve 2D render bağlamını al
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // UI elementlerini al
+        const startScreen = document.getElementById('start-screen');
+        const startButton = document.getElementById('startButton');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const restartButton = document.getElementById('restartButton');
+        const scoreDisplay = document.getElementById('score-display');
+        const currentScoreSpan = document.getElementById('current-score');
+        const messageBox = document.getElementById('message-box');
+        const finalScoreSpan = document.getElementById('final-score');
+        const gameMessageElement = document.getElementById('game-message');
+
+        // Ses için Audio nesnesi oluştur
+        const jumpSound = new Audio();
+        // --------------------------------------------------------------------------------------------------
+        // KENDİ SES DOSYANIZI BURAYA EKLEYİN. Dosya adını ve uzantısını değiştirin.
+        // Örnek: jumpSound.src = 'benim_sesim.wav';
+        jumpSound.src = 'benim-sesim.unknown'; 
+        // --------------------------------------------------------------------------------------------------
+
+        // Oyun değişkenleri
+        let player, gravity, jumpForce, obstacles, score, isPlaying, isGameStarted, lastObstacleTime, obstacleInterval;
+        let obstacleSpeed = 1.5; // Engellerin hızı
+        let messageTimeout; // Mesajın görünme süresini kontrol etmek için yeni değişken
+
+        // Karakter resmi
+        const playerImage = new Image();
+        // --------------------------------------------------------------------------------------------------
+        // BURADAN KENDİ KARAKTER RESMİNİN URL'SİNİ GİR!
+        // Örnek: playerImage.src = 'https://link.com/benimresmim.png';
+        // Veya resminiz dosya ile aynı klasördeyse: playerImage.src = 'benimresmim.png';
+        // Mevcut yer tutucu resim:
+        playerImage.src = 'güzelim.jpg';
+        // --------------------------------------------------------------------------------------------------
+        
+        // Oyun alanının boyutlarını pencereye göre ayarla
+        function resizeCanvas() {
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('load', () => {
+            resizeCanvas();
+            playerImage.onload = () => {
+                showStartScreen();
+            };
+            playerImage.onerror = () => {
+                console.error("Karakter resmi yüklenemedi. Varsayılan kare kullanılacak.");
+                showStartScreen();
+            };
+        });
+
+        // Oyun bileşenlerini tanımla
+        class Player {
+            constructor(x, y, width, height, image) {
+                this.x = x;
+                this.y = y;
+                this.width = width;
+                this.height = height;
+                this.image = image;
+                this.velocityY = 0;
+            }
+
+            // Oyuncuyu çiz
+            draw() {
+                // Eğer resim yüklenmediyse varsayılan bir kare çiz
+                if (this.image.complete && this.image.naturalHeight !== 0) {
+                    ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
+                } else {
+                    ctx.fillStyle = '#d1d5db'; // Varsayılan renk
+                    ctx.fillRect(this.x, this.y, this.width, this.height);
+                }
+            }
+
+            // Oyuncuyu güncelle
+            update() {
+                if(isGameStarted) {
+                    this.velocityY += gravity;
+                }
+                this.y += this.velocityY;
+
+                // Ekran sınırlarını kontrol et
+                if (this.y + this.height > canvas.height) {
+                    this.y = canvas.height - this.height;
+                    this.velocityY = 0;
+                    if (isGameStarted) gameOver();
+                }
+                if (this.y < 0) {
+                    this.y = 0;
+                    this.velocityY = 0;
+                }
+            }
+
+            // Zıpla
+            jump() {
+                this.velocityY = jumpForce;
+            }
+        }
+
+        class Obstacle {
+            constructor(x, y, width, height, color) {
+                this.x = x;
+                this.y = y;
+                this.width = width;
+                this.height = height;
+                this.color = color;
+            }
+
+            // Engeli çiz
+            draw() {
+                // --------------------------------------------------------------------------------------------------
+                // BURADAN ENGELİN RENGİNİ VE ÇİZİM ŞEKLİNİ DEĞİŞTİREBİLİRSİN!
+                // Şu anki engeller düz beyaz kareler:
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                // --------------------------------------------------------------------------------------------------
+            }
+
+            // Engeli güncelle (sola hareket ettir)
+            update() {
+                this.x -= obstacleSpeed;
+            }
+        }
+
+        // Oyunu sıfırla
+        function resetGame() {
+            player = new Player(canvas.width / 4, canvas.height / 2, 40, 60, playerImage);
+            gravity = 0.5;
+            jumpForce = -6;
+            obstacleSpeed = 1.5;
+            obstacles = [];
+            score = 0;
+            isPlaying = true;
+            isGameStarted = false;
+            lastObstacleTime = 0;
+            obstacleInterval = 3500;
+            
+            gameOverScreen.classList.add('hidden');
+            scoreDisplay.classList.remove('hidden');
+            gameMessageElement.classList.add('hidden');
+            currentScoreSpan.textContent = score;
+
+            if (messageTimeout) {
+                clearTimeout(messageTimeout);
+                messageTimeout = null;
+            }
+
+            gameLoop();
+        }
+
+        // Başlangıç ekranını göster
+        function showStartScreen() {
+            startScreen.classList.remove('hidden');
+            gameOverScreen.classList.add('hidden');
+            scoreDisplay.classList.add('hidden');
+        }
+
+        // Mesaj kutusunu göster
+        function showMessageBox() {
+            finalScoreSpan.textContent = score;
+            messageBox.style.display = 'flex';
+        }
+
+        // Mesaj kutusunu gizle
+        function hideMessageBox() {
+            messageBox.style.display = 'none';
+        }
+
+        // Skor mesajlarını güncelle
+        function updateScoreMessage() {
+            let message = "";
+            switch (score) {
+                case 5:
+                    message = "Beni hala peşinden mi koşturuyorsun?";
+                    break;
+                case 10:
+                    message = "Bekle bekle, seni yemek için geliyorum!";
+                    break;
+                case 15:
+                    message = "Nereye kaçıyorsun? Sadece bir öpücük istiyordum.";
+                    break;
+                case 20:
+                    message = "Aç kalmamı bu kadar istediğini bilmiyordum.";
+                    break;
+                case 25:
+                    message = "Yetiştim! Artık yakalandın!";
+                    break;
+                default:
+                    return;
+            }
+
+            if (messageTimeout) {
+                clearTimeout(messageTimeout);
+            }
+
+            gameMessageElement.textContent = message;
+            gameMessageElement.classList.remove('hidden');
+            messageTimeout = setTimeout(() => {
+                gameMessageElement.classList.add('hidden');
+                messageTimeout = null;
+            }, 3000);
+        }
+        
+        // Oyun döngüsü
+        function gameLoop(timestamp) {
+            if (!isPlaying) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            player.update();
+            player.draw();
+
+            if (isGameStarted) {
+                if (timestamp - lastObstacleTime > obstacleInterval) {
+                    createObstaclePair();
+                    lastObstacleTime = timestamp;
+                }
+            }
+
+            obstacles.forEach((obstacle, index) => {
+                obstacle.update();
+                obstacle.draw();
+
+                if (
+                    player.x < obstacle.x + obstacle.width &&
+                    player.x + player.width > obstacle.x &&
+                    player.y < obstacle.y + obstacle.height &&
+                    player.y + player.height > obstacle.y
+                ) {
+                    gameOver();
+                }
+
+                if (obstacle.x + obstacle.width < 0) {
+                    obstacles.splice(index, 1);
+                    score++;
+                    currentScoreSpan.textContent = score;
+                    updateScoreMessage();
+                }
+            });
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Üst ve alt engel çifti oluştur
+        function createObstaclePair() {
+            const obstacleWidth = 50 + Math.random() * 50;
+            const gapHeight = 180 + Math.random() * 70;
+            const gapY = 50 + Math.random() * (canvas.height - gapHeight - 100);
+            
+            // --------------------------------------------------------------------------------------------------
+            // Engellerin rengini buradan değiştirebilirsin!
+            const obstacleColor = 'white';
+            // --------------------------------------------------------------------------------------------------
+
+            const bottomObstacleHeight = canvas.height - gapY - gapHeight;
+            obstacles.push(new Obstacle(canvas.width, gapY + gapHeight, obstacleWidth, bottomObstacleHeight, obstacleColor));
+
+            const topObstacleHeight = gapY;
+            obstacles.push(new Obstacle(canvas.width, 0, obstacleWidth, topObstacleHeight, obstacleColor));
+        }
+
+        // Oyun bitti
+        function gameOver() {
+            isPlaying = false;
+            gameOverScreen.classList.remove('hidden');
+            scoreDisplay.classList.add('hidden');
+            showMessageBox();
+        }
+
+        // Oyuncu zıplama fonksiyonu ve ses çalma
+        function playerJump() {
+            if (isPlaying) {
+                if (!isGameStarted) {
+                    isGameStarted = true;
+                }
+                player.jump();
+                
+                // Sesi baştan başlat ve çal
+                jumpSound.currentTime = 0;
+                jumpSound.play();
+            }
+        }
+
+        // Olay dinleyicileri
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            playerJump();
+        });
+
+        canvas.addEventListener('click', (e) => {
+            e.preventDefault();
+            playerJump();
+        });
+        
+        startButton.addEventListener('click', () => {
+            startScreen.classList.add('hidden');
+            resetGame();
+        });
+
+        restartButton.addEventListener('click', () => {
+            resetGame();
+        });
+    </script>
+</body>
+</html>
